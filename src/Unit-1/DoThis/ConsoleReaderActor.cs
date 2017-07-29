@@ -1,5 +1,4 @@
 using System;
-using System.Runtime.Remoting.Messaging;
 using Akka.Actor;
 
 namespace WinTail
@@ -12,11 +11,11 @@ namespace WinTail
     {
         public const string ExitCommand = "exit";
         public const string StartCommand = "start";
-        private IActorRef _consoleWriterActor;
+        private IActorRef _validatorActor;
 
-        public ConsoleReaderActor(IActorRef consoleWriterActor)
+        public ConsoleReaderActor(IActorRef validatorActor)
         {
-            _consoleWriterActor = consoleWriterActor;
+            _validatorActor = validatorActor;
         }
 
         protected override void OnReceive(object message)
@@ -25,43 +24,19 @@ namespace WinTail
             {
                 DoPrintInstructions();
             }
-            else if (message is Messages.InputError)
-            {
-                _consoleWriterActor.Tell(message as Messages.InputError);
-            }
+
             GetAndValidateInput();
         }
 
         private void GetAndValidateInput()
         {
             var message = Console.ReadLine();
-            if (string.IsNullOrEmpty(message))
-            {
-                Self.Tell(new Messages.NullInputError("No input received"));
-            }
-            else if (string.Equals(message, ExitCommand, StringComparison.OrdinalIgnoreCase))
+            if (!string.IsNullOrEmpty(message) && string.Equals(message, ExitCommand, StringComparison.OrdinalIgnoreCase))
             {
                 Context.System.Terminate();
+                return;
             }
-            else
-            {
-                var valid = IsValid(message);
-                if (valid)
-                {
-                    _consoleWriterActor.Tell(new Messages.InputSuccess("Thank you! Message was valid."));
-                    Self.Tell(new Messages.ContinueProcessing());
-                }
-                else
-                {
-                    Self.Tell(new Messages.ValidationError("Invalid input: input had odd number of characters."));
-                }
-            }
-        }
-
-        private static bool IsValid(string message)
-        {
-            var valid = message.Length%2 == 0;
-            return valid;
+            _validatorActor.Tell(message);
         }
 
         private static void DoPrintInstructions()
